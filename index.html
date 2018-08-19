@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+
+<html>
+
+    <head>
+        <title>Transform Explorer</title>
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300,700" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css?family=Roboto+Mono" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css?family=Roboto:400,700,900" rel="stylesheet">
+        <style>
+            html {
+                height: 100%;
+                width: 100%;
+                padding: 0px;
+                margin: 0px;
+                overflow: hidden;
+            }
+            body {
+                height: 100%;
+                width: 100%;
+                padding: 0px;
+                margin: 0px;
+                background: #dddddd;
+                font-size: 14px;
+                font-family: 'Roboto', sans-serif;
+            }
+            #outer {
+                display: flex;
+                flex-flow: column nowrap;
+                width: 100%;
+                height: 100%
+            }
+            #top {
+                flex: 1 0 auto;
+                padding: 0px;
+                margin: 0px;
+            }
+            #bottom {
+                flex: 0 0 240px;
+                background: #aaaaaa;
+                display: flex;
+                flex-flow: column nowrap;
+            }
+            #tools {
+                flex: 0 0 40px;
+                //background: #808080;
+                align-items: stretch;
+                display: flex;
+            }
+            .tool-button {
+                transition: background 0.2s ease-out;
+                text-align: center;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                width: 100px;
+                text-transform: uppercase;
+                font-size: 12px;
+                font-weight: 700;
+                justify-content: center;
+                border: 1px solid #707070;
+                margin: 8px 0px 0px 8px;
+                border-radius: 2px;
+            }
+            .tool-button:hover {
+                background: rgba(255, 255, 255, 0.25);
+            }
+            .tool-button:active {
+                background: rgba(255, 255, 255, 0.5);
+            }
+            #transform-list {
+                flex: 1 0 auto;
+                display: flex;
+                align-items: center;
+            }
+            .transform-container {
+                display: flex;
+                margin-right: -28px;
+                transition: opacity 0.5s ease-out;
+                opacity: 0;
+            }
+            .transform-container-drop-zone {
+                flex: 0 0 20px;
+                width: 20px;
+                margin: 0px 4px 0px 4px;
+                border-radius: 2px;
+                transition: background 0.2s ease-out;
+            }
+            .transform-container-data {
+                flex: 0 1 auto;
+            }
+            .transform-outer {
+                border: 1px solid #eeeeee;
+                border-radius: 2px;
+                background: #cccccc;
+                width: 120px;
+                height: 120px;
+                padding: 0px;
+                display: flex;
+                flex-flow: column nowrap;
+                padding: 8px;
+            }
+            .transform-header {
+                display: flex;
+                margin-bottom: 8px;
+                height: 24px;
+            }
+            .transform-title {
+                font-size: 12px;
+                text-transform: uppercase;
+                flex: 1 0 auto;
+                font-weight: 700;
+                align-self: center;
+            }
+            .transform-delete-button {
+                flex: 0 0 24px;
+                cursor: pointer;
+                background-image: url('close.svg');
+                background-repeat: no-repeat;
+                background-size: 12px 12px;
+                background-position: center;
+                background-color: rgba(0, 0, 0, 0.15);
+                border-radius: 50%;
+                transition: background-color 0.2s ease-out;
+            }
+            .transform-delete-button:hover {
+                background-color: rgba(0, 0, 0, 0.35);
+            }
+            .transform-delete-button:active {
+                background-color: rgba(0, 0, 0, 0.55);
+            }
+            .transform-inner-container {
+            }
+            .transform-property-text-input {
+                border: 0px;
+                outline: 0px;
+                font-family: inherit;
+                border-radius: 2px;
+                width: 100%;
+                box-sizing: border-box;
+                margin: 0px;
+                font-family: 'Roboto Mono', sans-serif;
+            }
+            .transform-property-title {
+                margin-right: 8px;
+                text-align: right;
+            }
+            .transform-property-table {
+                margin: 0px;
+                border-collapse: collapse;
+                width: 100%;
+            }
+            #transform-result {
+            }
+            #equals {
+                font-size: 32px;
+                margin: 0px -8px 0px 20px;
+            }
+            .result-table td {
+                max-width: 70px;
+                width: 70px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                background: rgba(0, 0, 0, 0.1);
+                border-radius: 2px;
+            }
+            #bracket-left {
+                margin-left: 8px;
+                width: 4px;
+                border-width:  2px 0px 2px 2px;
+                border-color: black;
+                border-style: solid;
+                height: 100px;
+                border-radius: 3px 0px 0px 3px;
+            }
+            #bracket-right {
+                width: 4px;
+                border-width:  2px 2px 2px 0px;
+                border-color: black;
+                border-style: solid;
+                height: 100px;
+                border-radius: 0px 3px 3px 0px;
+            }
+        </style>
+        <script src='three.min.js'></script>
+        <script src='OrbitControls.js'></script>
+        <script src='TeapotBufferGeometry.js'></script>
+        <script>
+            'use strict'
+
+            let _transformContainerTemplate
+            let _transformTranslateTemplate
+            let _transformScaleTemplate
+            let _transformRotateTemplate
+            let _nextTransformId = 0
+            let _containerByTransformId = {}
+            let _outerContainer
+            let _model
+            let _renderer
+            let _scene
+            let _camera
+
+            const TRANSLATE = 1
+            const SCALE = 2
+            const ROTATE = 3
+
+            //
+            // Initialize renderer + scene
+            //
+            function initRenderer() {
+
+                // Get container element
+                let container = document.getElementById('top')
+                let rect = container.getBoundingClientRect()
+
+                //  Create camera, scene and renderer
+                _scene = new THREE.Scene();
+                _camera = new THREE.PerspectiveCamera( 75, rect.width / rect.height, 0.1, 1000 );
+                _renderer = new THREE.WebGLRenderer({antialias: true});
+                _renderer.setSize(rect.width, rect.height);
+                _renderer.domElement.style.position = 'absolute'
+
+                // Append WebGL element to canvas
+                container.appendChild( _renderer.domElement );
+
+                // Create teapot model
+                let geometry = new THREE.TeapotBufferGeometry(1)
+                let material = new THREE.MeshPhysicalMaterial({color: 0x3e90ff});
+                _model = new THREE.Mesh( geometry, material );
+                _model.matrixAutoUpdate = false
+                _scene.add( _model );
+
+                // Create lights
+                let light = new THREE.AmbientLight( 0xffffff, 0.4 );
+                let directionalLight = new THREE.DirectionalLight( 0xffffff, 0.5 );
+                _scene.add( light );
+                _scene.add( directionalLight );
+
+                // Create floor grid
+                let gridHelper = new THREE.GridHelper( 100, 200, new THREE.Color(0x303030), new THREE.Color(0x202020));
+                _scene.add( gridHelper );
+
+                // Create XYZ axes helper
+                let axesHelper = new THREE.AxesHelper( 5 );
+                axesHelper.position.set(0, 0.001, 0) // Note: Place it slightly above the ground plane to avoid Z fighting
+                _scene.add( axesHelper );
+
+                // Position camera
+                _camera.position.set(3, 4, 5)
+                _camera.lookAt(new THREE.Vector3(0,0,0))
+
+                // Configure orbit controller
+                let controls = new THREE.OrbitControls( _camera, container );
+                controls.addEventListener('change', function() {
+                    render()
+                })
+
+                // Listen for window resize events
+                window.addEventListener('resize', function() {
+                    resize();
+                });
+
+                // Do first render
+                render()
+            }
+
+            //
+            // Resize WebGL canvas, called when the window size changes
+            //
+            function resize() {
+
+                let container = document.getElementById('top')
+                let rect = container.getBoundingClientRect()
+                _camera.aspect = rect.width / rect.height;
+                _camera.updateProjectionMatrix();
+                _renderer.setSize(rect.width, rect.height);
+                render();
+            }
+
+            //
+            // Schedule next render
+            //
+            function render() {
+                if (!_renderer.framePending) {
+                    _renderer.framePending = true
+                    requestAnimationFrame(function() {
+                        _renderer.render( _scene, _camera );
+                        _renderer.framePending = false;
+                        _scene.autoUpdate = false // Note: Hack to disable scene 'auto update' after first render
+                    });
+                }
+            }
+
+            //
+            // Main entry point
+            //
+            function init() {
+
+                // Create DOM templates
+                _transformContainerTemplate = makeTemplate('transform-container')
+                _transformTranslateTemplate = makeTemplate('transform-translate')
+                _transformScaleTemplate = makeTemplate('transform-scale')
+                _transformRotateTemplate = makeTemplate('transform-rotate')
+                _outerContainer = document.getElementById('transform-list')
+
+                // Initialize renderer
+                initRenderer()
+
+                // Refresh transform + UI
+                updateTransform();
+            }
+
+            //
+            // Refresh transform: UI and actual model world matrix
+            //
+            function updateTransform() {
+
+                // Build matrix
+                let mat = new THREE.Matrix4()
+                let x, y, z, angle;
+                for (let i = 0; i < _outerContainer.children.length; i++) {
+                    let container = _outerContainer.children[i];
+                    let m = new THREE.Matrix4()
+                    switch (container.transformType) {
+                        case TRANSLATE:
+                            x = parseFloat(findChildElementById(container, 'x').value)
+                            y = parseFloat(findChildElementById(container, 'y').value)
+                            z = parseFloat(findChildElementById(container, 'z').value)
+                            m = m.makeTranslation(x, y, z)
+                            break
+                        case SCALE:
+                            x = parseFloat(findChildElementById(container, 'x').value)
+                            y = parseFloat(findChildElementById(container, 'y').value)
+                            z = parseFloat(findChildElementById(container, 'z').value)
+                            m = m.makeScale(x, y, z)
+                            break;
+                        case ROTATE:
+                            x = parseFloat(findChildElementById(container, 'x').value)
+                            y = parseFloat(findChildElementById(container, 'y').value)
+                            z = parseFloat(findChildElementById(container, 'z').value)
+                            angle = parseFloat(findChildElementById(container, 'angle').value)
+                            m = m.makeRotationAxis(new THREE.Vector3(x, y, z), (angle / 180) * Math.PI)
+                            break;
+                        default:
+                            // Note: Hack because non-transform elements live in the container too
+                            continue;
+                    }
+                    mat.multiply(m)
+                }
+
+                // Apply matrix + update UI
+                _model.matrixWorld = mat
+                setResult(mat)
+                render()
+            }
+
+            //
+            // Helper function to populate the 'result' matrix on the UI
+            //
+            function setResult(mat) {
+                for (let i = 0; i < 16; i++) {
+                    let id = 'm' + Math.floor(i%4) + Math.floor(i/4)
+                    document.getElementById(id).innerHTML = mat.elements[i]
+                }
+            }
+
+            //
+            // Helper function to create DOM templates
+            //
+            function makeTemplate(id) {
+                let element = document.getElementById(id)
+                element.parentNode.removeChild(element)
+                return element;
+            }
+
+            //
+            // Helper function to travese DOM, starting from a given subnode
+            //
+            function findChildElementById(parent, childId) {
+                let stack = []
+                stack.push(parent)
+                while (stack.length > 0) {
+                    let el = stack.pop()
+                    if (el.id == childId) { return el }
+                    for (let i = 0; i < el.children.length; i++) { stack.push(el.children[i]) }
+                }
+                return null
+            }
+
+            //
+            // Initialize input textbox
+            //
+            function initTextInput(parent, id, value, wheelDelta) {
+                wheelDelta = (wheelDelta === undefined) ? 0.1 : wheelDelta
+                let el = findChildElementById(parent, id);
+                el.value = value;
+                el.addEventListener('input', function() {
+                    updateTransform()
+                });
+                el.addEventListener('wheel', function(e) {
+                    let sign = e.deltaY < 0 ? -1 : 1
+                    el.value = parseFloat(el.value) + sign * wheelDelta
+                    updateTransform()
+                    e.preventDefault()
+                });
+            }
+
+            //
+            // Add new transform
+            //
+            function addTransform(type) {
+
+                // Create + initialize transform specific DOM element
+                let ui, title, color
+                switch (type) {
+                    case TRANSLATE:
+                        ui = _transformTranslateTemplate.cloneNode(true)
+                        initTextInput(ui, 'x', 0)
+                        initTextInput(ui, 'y', 0)
+                        initTextInput(ui, 'z', 0)
+                        title = 'Translate'
+                        color = '#91cfff'
+                        break;
+                    case SCALE:
+                        ui = _transformScaleTemplate.cloneNode(true)
+                        initTextInput(ui, 'x', 1)
+                        initTextInput(ui, 'y', 1)
+                        initTextInput(ui, 'z', 1)
+                        title = 'Scale'
+                        color = '#ff9191'
+                        break;
+                    case ROTATE:
+                        ui = _transformRotateTemplate.cloneNode(true)
+                        initTextInput(ui, 'x', 0)
+                        initTextInput(ui, 'y', 1)
+                        initTextInput(ui, 'z', 0)
+                        initTextInput(ui, 'angle', 0, 2.5)
+                        title = 'Rotate'
+                        color = '#fff391'
+                        break;
+                }
+
+                // Generate unique ID for transform
+                let transformId = _nextTransformId++;
+
+                // Create container DOM element
+                let container = _transformContainerTemplate.cloneNode(true)
+                _containerByTransformId[transformId] = container;
+                let transformOuter = findChildElementById(container, 'transform-outer')
+
+                // Assign unique transform ID
+                transformOuter.transformId
+                    = findChildElementById(container, 'drop-zone-before').transformId
+                    = findChildElementById(container, 'drop-zone-after').transformId
+                    = transformId
+
+                // Preprate UI, etc.
+                transformOuter.style.backgroundColor = color;
+                container.transformType = type
+                findChildElementById(container, 'transform-title').innerHTML = title;
+                findChildElementById(container, 'transform-inner-container').appendChild(ui)
+                findChildElementById(container, 'transform-delete-button').addEventListener('click', function(e) {
+                    _outerContainer.removeChild(container)
+                    delete _containerByTransformId[transformId]
+                    updateTransform()
+                });
+
+                // Add new transform to UI
+                _outerContainer.appendChild(container)
+               getComputedStyle(container, null).opacity // Note: Force style reflow so the fade-in animation will work
+               container.style.opacity = 1
+            }
+
+            //
+            // Below: Drag drop stuff
+            //
+            function drag(e) {
+                e.dataTransfer.setData('transformId', e.target.transformId);
+            }
+
+            function dropBefore(e) {
+                processDrop(e, false)
+            }
+
+            function dropAfter(e) {
+                processDrop(e, true)
+            }
+
+            function processDrop(e, after) {
+
+                var parentNode = _outerContainer;
+                var referenceNode = _containerByTransformId[e.target.transformId]
+                var newNode = _containerByTransformId[e.dataTransfer.getData('transformId')]
+
+                if (referenceNode !== newNode) {
+
+                    if (after) {
+                        referenceNode = referenceNode.nextSibling
+                    }
+
+                    newNode.parentNode.removeChild(newNode);
+                    parentNode.insertBefore(newNode, referenceNode);
+                }
+                e.target.style.background = ''
+                e.preventDefault()
+
+                updateTransform()
+            }
+
+            function dragOver(e) {
+                e.target.style.background = '#91ff99'
+                e.preventDefault()
+            }
+
+            function dragLeave(e) {
+                e.target.style.background = ''
+                e.preventDefault()
+            }
+
+        </script>
+    </head>
+
+    <body onload='init()'>
+        <div id='outer'>
+            <div id='top'></div>
+            <div id='bottom'>
+
+                <div id='tools'>
+                    <div onclick='addTransform(TRANSLATE)' class='tool-button'>Translate</div>
+                    <div onclick='addTransform(ROTATE)' class='tool-button'>Rotate</div>
+                    <div onclick='addTransform(SCALE)' class='tool-button'>Scale</div>
+                </div>
+
+                <div id='transform-list'>
+
+                    <div id='bracket-left'></div>
+                    <div id='transform-result'>
+                        <table class='result-table'>
+                            <tr>
+                                <td id='m00'></td>
+                                <td id='m01'></td>
+                                <td id='m02'></td>
+                                <td id='m03'></td>
+                            </tr>
+                            <tr>
+                                <td id='m10'></td>
+                                <td id='m11'></td>
+                                <td id='m12'></td>
+                                <td id='m13'></td>
+                            </tr>
+                            <tr>
+                                <td id='m20'></td>
+                                <td id='m21'></td>
+                                <td id='m22'></td>
+                                <td id='m23'></td>
+                            </tr>
+                            <tr>
+                                <td id='m30'></td>
+                                <td id='m31'></td>
+                                <td id='m32'></td>
+                                <td id='m33'></td>
+                            </tr>
+                        </table>
+                    </div>
+                    <div id='bracket-right'></div>
+                    <div id='equals'>=</div>
+                </div>
+
+                <div class='transform-translate' id='transform-translate'>
+                    <table class='transform-property-table'>
+                         <tr>
+                            <td><div class='transform-property-title'>x</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='x'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>y</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='y'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>z</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='z'></input></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class='transform-scale' id='transform-scale'>
+                   <table class='transform-property-table'>
+                        <tr>
+                            <td><div class='transform-property-title'>x</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='x'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>y</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='y'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>z</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='z'></input></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class='transform-rotate' id='transform-rotate'>
+                   <table class='transform-property-table'>
+                        <tr>
+                            <td><div class='transform-property-title'>x</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='x'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>y</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='y'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>z</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='z'></input></td>
+                        </tr>
+                        <tr>
+                            <td><div class='transform-property-title'>angle</div><td>
+                            <td><input type='text' class='transform-property-text-input' id='angle'></input></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class='transform-container' id='transform-container'>
+                    <div class='transform-container-drop-zone' ondrop='dropBefore(event)' id='drop-zone-before' ondragover='dragOver(event)' ondragleave='dragLeave(event)'></div>
+                    <div class='transform-container-data'>
+                        <div class='transform-outer' id='transform-outer' draggable='true' ondragstart='drag(event)'>
+                            <div class='transform-header'>
+                                <div class='transform-title' id='transform-title'></div>
+                                <div class='transform-delete-button' id='transform-delete-button'></div>
+                            </div>
+                            <div class='transform-inner-container' id='transform-inner-container'></div>
+                        </div>
+                    </div>
+                    <div class='transform-container-drop-zone' ondrop='dropAfter(event)' id='drop-zone-after' ondragover='dragOver(event)' ondragleave='dragLeave(event)'></div>
+                </div>
+            </div>
+        </div>
+    </body>
+
+</html>
